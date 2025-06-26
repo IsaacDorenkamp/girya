@@ -1,0 +1,3 @@
+class EmailValidationError(Exception):
+    pass
+

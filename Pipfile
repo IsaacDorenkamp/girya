@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = {extras = ["standard"], version = "*"}
+pydantic = "*"
+argon2-cffi = "*"
+pyjwt = "*"
+
+[dev-packages]
+pytest = "*"
+
+[requires]
+python_version = "3.12"
