@@ -20,7 +20,7 @@ router = APIRouter()
 def create_user(
     user: schemas.UserInput,
     connection: typing.Annotated[sqlite3.Connection, Depends(db_connection)]
-) -> schemas.UserRecord:
+) -> schemas.User:
     try:
         return services.create_user(connection, user.email, user.password, user.first_name, user.last_name)
     except sqlite3.IntegrityError:

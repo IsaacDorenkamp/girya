@@ -8,12 +8,15 @@ class UserInput(BaseModel):
     password: str
 
 
-class UserRecord(BaseModel):
+class User(BaseModel):
     email: str
     first_name: str
     last_name: str
-    password: str | None = Field(None)
     id: int
+
+
+class UserRecord(User):
+    password: str
 
 
 class Credentials(BaseModel):

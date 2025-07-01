@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from dependencies import db_connection
 from .exceptions import EmailValidationError
-from .schemas import UserInput, UserRecord
+from .schemas import UserInput, User, UserRecord
 
 
 def validate_email(email: str):
@@ -83,7 +83,7 @@ def validate_email(email: str):
 
 
 def create_user(connection: sqlite3.Connection, email: str, password: str, first_name: str,
-                last_name: str) -> UserRecord:
+                last_name: str) -> User:
     """
     Create a user in the database.
 
@@ -100,10 +100,13 @@ def create_user(connection: sqlite3.Connection, email: str, password: str, first
         "(:email, :first_name, :last_name, :password)",
         { "email": email, "first_name": first_name, "last_name": last_name, "password": pw_hash }
     )
-    return UserRecord(email=email, first_name=first_name, last_name=last_name, id=cursor.lastrowid)
+    if cursor.lastrowid is not None:
+        return User(email=email, first_name=first_name, last_name=last_name, id=cursor.lastrowid)
+    else:
+        raise HTTPException(status_code=500, detail="An error occurred creating a user.")
 
 
-def find_user(connection: sqlite3.Connection, email: str) -> UserRecord:
+def find_user(connection: sqlite3.Connection, email: str) -> UserRecord | None:
     result = connection.execute("SELECT email, first_name, last_name, password, id FROM user WHERE email = :email",
                                 { "email": email })
     user = result.fetchone()

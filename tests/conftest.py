@@ -3,12 +3,7 @@ import jwt
 import pytest
 
 import sqlite3
-import sys
 import time
-from os.path import dirname, abspath, join
-
-root_dir = join(dirname(dirname(abspath(__file__))), "src")
-sys.path.append(root_dir)
 
 from main import app
 from config import JWT_ALGO, JWT_AUD, JWT_ISS, JWT_KEY
@@ -19,11 +14,29 @@ def _create_tables(connection):
     connection.executescript("""
 BEGIN;
 CREATE TABLE user(
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     email VARCHAR UNIQUE NOT NULL,
     first_name VARCHAR NOT NULL,
     last_name VARCHAR NOT NULL,
     password VARCHAR NOT NULL
+);
+CREATE TABLE lift(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR NOT NULL,
+    slug VARCHAR UNIQUE NOT NULL
+);
+CREATE TABLE split(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR NOT NULL,
+    slug VARCHAR UNIQUE NOT NULL
+);
+CREATE TABLE split_lift(
+    split_id INTEGER,
+    lift_id INTEGER,
+    PRIMARY KEY (split_id, lift_id),
+    FOREIGN KEY (split_id) REFERENCES split(id),
+    FOREIGN KEY (lift_id) REFERENCES lift(id),
+    UNIQUE(split_id, lift_id) ON CONFLICT ROLLBACK
 );
 COMMIT;
 """)
