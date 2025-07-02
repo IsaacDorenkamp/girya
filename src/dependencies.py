@@ -33,10 +33,10 @@ def get_user(
 ) -> auth.schemas.User:
     import auth.services  # imported here to avoid circular import
     try:
-        payload = jwt.decode(token, config.JWT_KEY, algorithms=config.JWT_ALGS)
+        payload = jwt.decode(token, config.JWT_KEY, audience=config.JWT_AUD, algorithms=config.JWT_ALGS)
         if "sub" not in payload:
             raise jwt.InvalidTokenError()
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials."
@@ -46,14 +46,14 @@ def get_user(
     for scope in security_scopes.scopes:
         if scope not in scopes:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions.",
             )
 
-    user = auth.services.find_user(connection, payload["email"])
+    user = auth.services.find_user(connection, payload["sub"])
     if user is None:
         raise HTTPException(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found.",
         )
 

@@ -8,7 +8,7 @@ from . import schemas
 
 def create_lift(connection: sqlite3.Connection, lift: schemas.PartialLift) -> schemas.Lift:
     cursor = connection.execute("INSERT INTO lift (name, slug) VALUES (:name, :slug)", lift.model_dump())
-    return schemas.Lift(**lift.model_dump(), id=cast(int, cursor.lastrowid))
+    return schemas.Lift(**lift.model_dump(exclude={"id"}), id=cast(int, cursor.lastrowid))
 
 
 def create_split(connection: sqlite3.Connection, split: schemas.SplitInput) -> schemas.Split:
@@ -61,8 +61,6 @@ ORDER BY lift.id ASC""", { "split_id": split.id })
 
 
 def update_lift_by_slug(connection: sqlite3.Connection, slug: str, lift: schemas.PartialLift) -> schemas.Lift | None:
-    check = connection.execute("SELECT * FROM lift WHERE slug = ?", (slug,))
-    print("check:", check.fetchone())
     cursor = connection.execute("UPDATE lift SET name = :name, slug = :new_slug WHERE slug = :slug RETURNING lift.id", {
         "name": lift.name,
         "slug": slug,
@@ -73,3 +71,38 @@ def update_lift_by_slug(connection: sqlite3.Connection, slug: str, lift: schemas
         return None
 
     return schemas.Lift(**lift.model_dump(exclude={"id"}), id=result[0])
+
+
+def update_split_by_slug(connection: sqlite3.Connection, slug: str, split: schemas.SplitInput) -> schemas.Split | None:
+    cursor = connection.execute("UPDATE split SET name = :name, slug = :new_slug WHERE slug = :slug RETURNING split.id", {
+        "name": split.name,
+        "slug": slug,
+        "new_slug": split.slug,
+    })
+    result = cursor.fetchone()
+    if result is None:
+        return None
+
+    split_id = result[0]
+
+    # update lifts
+    interpolations = "(" + ", ".join(["?" for _ in range(len(split.lifts))]) + ")"
+    cursor = connection.execute("SELECT id, name, slug FROM lift WHERE slug in %s" % interpolations, split.lifts)
+    lifts = cursor.fetchall()
+
+    connection.execute("DELETE FROM split_lift WHERE lift_id NOT IN %s" % interpolations, split.lifts)
+
+    interpolations = ", ".join(["(?, ?)" for _ in range(len(split.lifts))])
+    values = []
+    lift_models = []
+    for lift in lifts:
+        values.extend([split_id, lift[0]])
+        lift_models.append(schemas.Lift(id=lift[0], name=lift[1], slug=lift[2]))
+    connection.execute("INSERT INTO split_lift (split_id, lift_id) VALUES %s" % interpolations, values)
+
+    return schemas.Split(
+        id=split_id,
+        name=split.name,
+        slug=split.slug,
+        lifts=lift_models,
+    )

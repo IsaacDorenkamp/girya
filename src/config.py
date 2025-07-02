@@ -5,3 +5,8 @@ JWT_ISS = "girya"
 JWT_AUD = "girya"
 JWT_ALGO = "HS512"
 JWT_ALGS = ["HS512"]
+
+PERMISSIONS_GROUPS = {
+    "admin": "read:lift write:lift read:split write:split",
+    "common": "read:lift read:split",
+}

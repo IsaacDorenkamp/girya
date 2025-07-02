@@ -1,37 +1,8 @@
 from __future__ import annotations
 import sqlite3
-import typing
 import pytest
 
 from api import services, schemas
-
-
-@pytest.fixture
-def lifts(db_connection: sqlite3.Connection) -> list[schemas.Lift]:
-    lifts = []
-    for i in range(3):
-        lift_input = schemas.PartialLift(name=f"Lift {i+1}", slug=f"some-lift-{i+1}")
-        lift = services.create_lift(db_connection, lift_input)
-        lifts.append(lift)
-    db_connection.commit()
-    return lifts
-
-
-@pytest.fixture
-def split(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]) -> schemas.Split:
-    cursor = db_connection.execute("INSERT INTO split (name, slug) VALUES (:name, :slug)", {
-        "name": "Split",
-        "slug": "split",
-    })
-    split_id = typing.cast(int, cursor.lastrowid)
-    for lift in lifts:
-        db_connection.execute("INSERT INTO split_lift (split_id, lift_id) VALUES (:split_id, :lift_id)", {
-            "split_id": split_id,
-            "lift_id": lift.id,
-        })
-
-    db_connection.commit()
-    return schemas.Split(id=split_id, name="Split", slug="split", lifts=lifts)
 
 
 @pytest.mark.unit
@@ -103,14 +74,11 @@ def test_get_split_by_slug(db_connection: sqlite3.Connection):
     assert services.get_split_by_slug(db_connection, "no-split") is None
 
 
-@pytest.mark.usefixtures("lifts")
 @pytest.mark.unit
 def test_update_lift_by_slug(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]):
     new_lift = lifts[0].model_copy()
     new_lift.slug = "new-slug"
     new_lift.name = "New Lift"
-
-    print("base slug:", lifts[0].slug)
 
     lift = services.update_lift_by_slug(db_connection, lifts[0].slug, new_lift)
     assert lift
@@ -121,4 +89,21 @@ def test_update_lift_by_slug(db_connection: sqlite3.Connection, lifts: list[sche
     assert fetched
     assert fetched.slug == "new-slug"
     assert fetched.name == "New Lift"
+
+
+@pytest.mark.unit
+def test_update_split_by_slug(db_connection: sqlite3.Connection, lifts: list[schemas.Lift], split: schemas.Split):
+    new_lift = lifts[0].model_copy()
+    new_lift.slug = "new-slug"
+    new_lift.name = "New Lift"
+    services.create_lift(db_connection, new_lift)
+
+    new_split = schemas.SplitInput(name="New Split", slug="new-split", lifts=["some-lift-1", "new-slug"])
+    services.update_split_by_slug(db_connection, split.slug, new_split)
+
+    refetched = services.get_split_by_slug(db_connection, "new-split")
+    assert refetched
+    assert refetched.name == "New Split"
+    assert refetched.slug == "new-split"
+    assert len(refetched.lifts) == 2
 

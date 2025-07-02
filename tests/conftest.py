@@ -1,3 +1,4 @@
+import argon2
 from fastapi.testclient import TestClient
 import jwt
 import pytest
@@ -5,8 +6,9 @@ import pytest
 import sqlite3
 import time
 
+import auth.schemas
 from main import app
-from config import JWT_ALGO, JWT_AUD, JWT_ISS, JWT_KEY
+from config import JWT_ALGO, JWT_AUD, JWT_ISS, JWT_KEY, PERMISSIONS_GROUPS
 from dependencies import db_connection as db_conn_dep
 
 
@@ -59,22 +61,62 @@ def test_client():
 
 
 @pytest.fixture
-def simple_access_token():
+def simple_user(db_connection: sqlite3.Connection) -> auth.schemas.User:
+    hashed = argon2.PasswordHasher().hash("simple")
+    cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password)
+VALUES ("test@example.com", "Simple", "User", "%s") RETURNING id""" % hashed)
+    user_id = cursor.fetchone()[0]
+    return auth.schemas.User(
+        email="test@example.com",
+        first_name="Simple",
+        last_name="User",
+        id=user_id,
+    )
+
+
+@pytest.fixture
+def admin_user(db_connection: sqlite3.Connection) -> auth.schemas.User:
+    hashed = argon2.PasswordHasher().hash("admin")
+    cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password)
+VALUes ("test@example.com", "Admin", "User", "%s") RETURNING id""" % hashed)
+    user_id = cursor.fetchone()[0]
+    return auth.schemas.User(
+        email="test@example.com",
+        first_name="Admin",
+        last_name="User",
+        id=user_id,
+    )
+
+
+@pytest.fixture
+def simple_access_token(simple_user: auth.schemas.User) -> str:
     return jwt.encode({
         "iss": JWT_ISS,
         "sub": "test@example.com",
         "aud": JWT_AUD,
         "exp": int(time.time()) + (60 * 5),
+        "scope": PERMISSIONS_GROUPS["common"]
     }, JWT_KEY, algorithm=JWT_ALGO)
 
 
 @pytest.fixture
-def simple_refresh_token():
+def simple_refresh_token(simple_user: auth.schemas.User) -> str:
     return jwt.encode({
         "iss": JWT_ISS,
         "sub": "test@example.com",
         "aud": JWT_AUD,
         "exp": int(time.time()) + (60 * 60),
         "scope": "refresh",
+    }, JWT_KEY, algorithm=JWT_ALGO)
+
+
+@pytest.fixture
+def admin_access_token(admin_user: auth.schemas.User) -> str:
+    return jwt.encode({
+        "iss": JWT_ISS,
+        "sub": "test@example.com",
+        "aud": JWT_AUD,
+        "exp": int(time.time()) + (60 * 5),
+        "scope": PERMISSIONS_GROUPS["admin"],
     }, JWT_KEY, algorithm=JWT_ALGO)
 
