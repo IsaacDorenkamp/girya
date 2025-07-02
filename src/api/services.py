@@ -1,7 +1,7 @@
 import sqlite3
 from typing import cast
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 from . import schemas
 
@@ -42,13 +42,8 @@ def get_lift_by_slug(connection: sqlite3.Connection, slug: str) -> schemas.Lift 
     return schemas.Lift(id=lift_data[0], name=lift_data[1], slug=lift_data[2])
 
 
-def get_split_by_slug(connection: sqlite3.Connection, slug: str) -> schemas.Split | None:
-    cursor = connection.execute("SELECT id, name, slug FROM split WHERE slug = :slug", { "slug": slug })
-    split_data = cursor.fetchone()
-    if split_data is None:
-        return None
-
-    split = schemas.Split(id=split_data[0], name=split_data[1], slug=split_data[2], lifts=[])
+def build_split(connection: sqlite3.Connection, data: tuple):
+    split = schemas.Split(id=data[0], name=data[1], slug=data[2], lifts=[])
     cursor = connection.execute("""SELECT lift.id, lift.name, lift.slug FROM lift
 INNER JOIN split_lift ON lift.id = split_lift.lift_id WHERE split_lift.split_id = :split_id
 ORDER BY lift.id ASC""", { "split_id": split.id })
@@ -58,6 +53,24 @@ ORDER BY lift.id ASC""", { "split_id": split.id })
         split.lifts.append(lift)
 
     return split
+
+
+def get_split_by_slug(connection: sqlite3.Connection, slug: str) -> schemas.Split | None:
+    cursor = connection.execute("SELECT id, name, slug FROM split WHERE slug = :slug", { "slug": slug })
+    split_data = cursor.fetchone()
+    if split_data is None:
+        return None
+
+    return build_split(connection, split_data)
+
+
+def get_split_by_id(connection: sqlite3.Connection, id: int) -> schemas.Split | None:
+    cursor = connection.execute("SELECT id, name, slug FROM split WHERE id = :id", { "id": id })
+    split_data = cursor.fetchone()
+    if split_data is None:
+        return None
+
+    return build_split(connection, split_data)
 
 
 def update_lift_by_slug(connection: sqlite3.Connection, slug: str, lift: schemas.PartialLift) -> schemas.Lift | None:
@@ -106,3 +119,51 @@ def update_split_by_slug(connection: sqlite3.Connection, slug: str, split: schem
         slug=split.slug,
         lifts=lift_models,
     )
+
+
+def create_workout(connection: sqlite3.Connection, workout_input: schemas.WorkoutInput, user_id: int) -> schemas.Workout:
+    split = get_split_by_slug(connection, workout_input.split)
+    if split is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No split '{workout_input.split}'")
+
+    workout = schemas.Workout(**workout_input.model_dump(exclude={"split"}), user_id=user_id, split=split)
+    connection.execute("INSERT INTO workout (at, slug, split_id, user_id) VALUES (:at, :slug, :split_id, :user_id)", {
+        "at": workout.at,
+        "slug": workout.slug,
+        "split_id": workout.split.id,
+        "user_id": workout.user_id,
+    })
+    return workout
+
+
+def get_workout_by_slug(connection: sqlite3.Connection, slug: str):
+    cursor = connection.execute("SELECT at, slug, split_id, user_id FROM workout WHERE slug = ?", (slug,))
+    result = cursor.fetchone()
+    if result is None:
+        return None
+
+    split = get_split_by_id(connection, result[2])
+    if split is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No split with id '{result[2]}'")
+
+    return schemas.Workout(
+        at=result[0],
+        slug=result[1],
+        split=split,
+        user_id=result[3],
+    )
+
+
+def delete_workout_by_slug(connection: sqlite3.Connection, slug: str, user_id: int | None = None):
+    data: dict[str, str | int] = { "slug": slug }
+    if user_id is not None:
+        query = "DELETE FROM workout WHERE slug = :slug AND user_id = :user_id"
+        data["user_id"] = user_id
+    else:
+        query = "DELETE FROM workout WHERE slug = :slug"
+
+    cursor = connection.execute(query, data)
+    connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Workout '{slug}' not found")
+

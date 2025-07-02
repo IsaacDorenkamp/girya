@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 from typing import Annotated
 
@@ -10,6 +11,11 @@ import jwt
 
 import auth.schemas
 import config
+
+
+def setup():
+    sqlite3.register_adapter(datetime.datetime, lambda dt: int(dt.timestamp()))
+    sqlite3.register_converter("datetime", lambda dtstr: datetime.datetime.fromtimestamp(int(dtstr), tz=datetime.timezone.utc))
 
 
 def db_connection():

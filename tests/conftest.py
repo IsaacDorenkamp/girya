@@ -33,12 +33,20 @@ CREATE TABLE split(
     slug VARCHAR UNIQUE NOT NULL
 );
 CREATE TABLE split_lift(
-    split_id INTEGER,
-    lift_id INTEGER,
+    split_id INTEGER NOT NULL,
+    lift_id INTEGER NOT NULL,
     PRIMARY KEY (split_id, lift_id),
     FOREIGN KEY (split_id) REFERENCES split(id),
     FOREIGN KEY (lift_id) REFERENCES lift(id),
     UNIQUE(split_id, lift_id) ON CONFLICT ROLLBACK
+);
+CREATE TABLE workout(
+    at DATETIME NOT NULL,
+    slug VARCHAR PRIMARY KEY,
+    split_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    FOREIGN KEY (split_id) REFERENCES split(id),
+    FOREIGN KEY (user_id) REFERENCES user(id)
 );
 COMMIT;
 """)

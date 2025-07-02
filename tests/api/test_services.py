@@ -1,7 +1,11 @@
 from __future__ import annotations
 import sqlite3
+import datetime
+
+from fastapi import HTTPException
 import pytest
 
+import auth.schemas
 from api import services, schemas
 
 
@@ -106,4 +110,52 @@ def test_update_split_by_slug(db_connection: sqlite3.Connection, lifts: list[sch
     assert refetched.name == "New Split"
     assert refetched.slug == "new-split"
     assert len(refetched.lifts) == 2
+
+
+@pytest.mark.usefixtures("split")
+@pytest.mark.unit
+def test_create_workout(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
+    workout_input = schemas.WorkoutInput(
+        at=datetime.datetime(year=2025, month=1, day=1, tzinfo=datetime.timezone.utc),
+        split="split",
+    )
+    workout = services.create_workout(db_connection, workout_input, simple_user.id)
+    assert workout.slug == f"20250101-000000-000000-{simple_user.id}"
+    assert workout.split.name == "Split"
+    assert workout.split.slug == "split"
+
+
+@pytest.mark.unit
+def test_create_workout_missing_split(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
+    workout_input = schemas.WorkoutInput(
+        at=datetime.datetime(year=2025, month=1, day=1, tzinfo=datetime.timezone.utc),
+        split="split",
+    )
+    with pytest.raises(HTTPException):
+        services.create_workout(db_connection, workout_input, simple_user.id)
+
+
+@pytest.mark.usefixtures("workout")
+@pytest.mark.unit
+def test_get_workout(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
+    fetched_workout = services.get_workout_by_slug(db_connection, "workout-slug")
+    assert fetched_workout
+    assert fetched_workout.slug == "workout-slug"
+
+    assert fetched_workout.split.name == "Split"
+    assert fetched_workout.split.slug == "split"
+
+    assert fetched_workout.user_id == simple_user.id
+
+    fetched_workout = services.get_workout_by_slug(db_connection, "no-workout-slug")
+    assert fetched_workout is None
+
+
+@pytest.mark.unit
+def test_delete_workout(db_connection: sqlite3.Connection, workout: schemas.Workout):
+    services.delete_workout_by_slug(db_connection, workout.slug)
+    assert services.get_workout_by_slug(db_connection, workout.slug) is None
+
+    with pytest.raises(HTTPException):
+        services.delete_workout_by_slug(db_connection, workout.slug)
 
