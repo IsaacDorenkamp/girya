@@ -18,7 +18,11 @@ def create_lift(
     connection: Annotated[sqlite3.Connection, Depends(db_connection)],
     _: Annotated[auth.schemas.User, Security(get_user, scopes=["write:lift"])]
 ) -> schemas.Lift:
-    return services.create_lift(connection, lift_input)
+    try:
+        return services.create_lift(connection, lift_input)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Lift '{lift_input.slug}' already exists.")
 
 
 @router.get("/lifts/{slug}")
@@ -55,7 +59,11 @@ def create_split(
     connection: Annotated[sqlite3.Connection, Depends(db_connection)],
     _: Annotated[auth.schemas.User, Security(get_user, scopes=["write:split"])]
 ) -> schemas.Split:
-    return services.create_split(connection, split_input)
+    try:
+        return services.create_split(connection, split_input)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Split '{split_input.slug}' already exists.")
 
 
 @router.put("/splits/{slug}")
@@ -114,4 +122,51 @@ def delete_workout(
     user: Annotated[auth.schemas.User, Security(get_user, scopes=["delete:workout"])],
 ):
     services.delete_workout_by_slug(connection, slug, user.id)
+
+
+@router.post("/sets", status_code=status.HTTP_201_CREATED)
+def create_set(
+    set_input: schemas.SetInput,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    user: Annotated[auth.schemas.User, Security(get_user, scopes=["write:set"])],
+) -> schemas.Set:
+    try:
+        return services.create_set(connection, set_input, user.id)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No lift '{set_input.lift}'")
+
+
+@router.put("/sets/{set_id}")
+def update_set(
+    set_id: int,
+    set_update_input: schemas.SetUpdateInput,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    user: Annotated[auth.schemas.User, Security(get_user, scopes=["write:set"])],
+) -> schemas.Set:
+    try:
+        return services.update_set_by_id(connection, set_id, set_update_input, user.id)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No lift '{set_update_input.lift}'")
+
+
+@router.get("/sets/{set_id}")
+def get_set(
+    set_id: int,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    user: Annotated[auth.schemas.User, Security(get_user, scopes=["read:set"])],
+) -> schemas.Set:
+    lift_set = services.get_set_by_id(connection, set_id, user.id)
+    if lift_set is not None:
+        return lift_set
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No set '{set_id}'")
+
+
+@router.delete("/sets/{set_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_set(
+    set_id: int,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    user: Annotated[auth.schemas.User, Security(get_user, scopes=["delete:set"])],
+):
+    services.delete_set_by_id(connection, set_id, user.id)
 

@@ -48,6 +48,16 @@ CREATE TABLE workout(
     FOREIGN KEY (split_id) REFERENCES split(id),
     FOREIGN KEY (user_id) REFERENCES user(id)
 );
+CREATE TABLE lift_set(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lift_slug VARCHAR NOT NULL,
+    workout_slug VARCHAR NOT NULL,
+    reps INTEGER NOT NULL,
+    weight REAL NOT NULL,
+    weight_unit VARCHAR NOT NULL,
+    FOREIGN KEY (lift_slug) REFERENCES lift(slug),
+    FOREIGN KEY (workout_slug) REFERENCES workout(slug)
+);
 COMMIT;
 """)
 
@@ -55,6 +65,7 @@ COMMIT;
 @pytest.fixture(scope="function", autouse=True)
 def db_connection():
     connection = sqlite3.connect(":memory:", check_same_thread=False)
+    connection.execute("PRAGMA foreign_keys = 1")
 
     _create_tables(connection)
 
@@ -86,10 +97,10 @@ VALUES ("test@example.com", "Simple", "User", "%s") RETURNING id""" % hashed)
 def admin_user(db_connection: sqlite3.Connection) -> auth.schemas.User:
     hashed = argon2.PasswordHasher().hash("admin")
     cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password)
-VALUes ("test@example.com", "Admin", "User", "%s") RETURNING id""" % hashed)
+VALUES ("admin@example.com", "Admin", "User", "%s") RETURNING id""" % hashed)
     user_id = cursor.fetchone()[0]
     return auth.schemas.User(
-        email="test@example.com",
+        email="admin@example.com",
         first_name="Admin",
         last_name="User",
         id=user_id,
@@ -122,7 +133,7 @@ def simple_refresh_token(simple_user: auth.schemas.User) -> str:
 def admin_access_token(admin_user: auth.schemas.User) -> str:
     return jwt.encode({
         "iss": JWT_ISS,
-        "sub": "test@example.com",
+        "sub": "admin@example.com",
         "aud": JWT_AUD,
         "exp": int(time.time()) + (60 * 5),
         "scope": PERMISSIONS_GROUPS["admin"],

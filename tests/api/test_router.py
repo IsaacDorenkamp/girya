@@ -4,6 +4,8 @@ import typing
 
 import pytest
 
+from api import schemas
+
 
 @pytest.mark.integration
 def test_create_lift(test_client: TestClient, admin_access_token: str):
@@ -215,9 +217,132 @@ def test_delete_workout(test_client: TestClient, simple_access_token: str):
 
 
 @pytest.mark.usefixtures("split", "workout")
+@pytest.mark.integration
 def test_delete_workout_unauthorized(test_client: TestClient):
     response = test_client.delete("/api/workouts/workout-slug")
     assert response.status_code == 401
+
+
+@pytest.mark.integration
+def test_create_set(test_client: TestClient, lifts: list[schemas.Lift], workout: schemas.Workout,
+                    simple_access_token: str):
+    response = test_client.post("/api/sets", json={
+        "lift": lifts[0].slug,
+        "workout": workout.slug,
+        "reps": 8,
+        "weight": 160,
+        "weight_unit": schemas.WeightUnit.lb,
+    }, headers={ "Authorization": f"Bearer {simple_access_token}" })
+    assert response.status_code == 201
+
+    lift_set = response.json()
+    assert lift_set["lift"]["slug"] == lifts[0].slug
+    assert lift_set["reps"] == 8
+    assert lift_set["weight"] == 160
+    assert lift_set["weight_unit"] == schemas.WeightUnit.lb
+
+
+@pytest.mark.integration
+def test_create_set_workout_not_found(test_client: TestClient, lifts: list[schemas.Lift],
+                                      workout: schemas.Workout, admin_access_token: str):
+    # The admin_access_token refers to a user who does not own the provided workout, which
+    # should incur a 404 (since the workout cannot be found for the authorized user)
+    response = test_client.post("/api/sets", json={
+        "lift": lifts[0].slug,
+        "workout": workout.slug,
+        "reps": 8,
+        "weight": 160,
+        "weight_unit": schemas.WeightUnit.lb,
+    }, headers={ "Authorization": f"Bearer {admin_access_token}" })
+    assert response.status_code == 404
+
+
+@pytest.mark.integration
+def test_update_set(test_client: TestClient, lifts: list[schemas.Lift], lift_sets: list[schemas.Set], workout: schemas.Workout,
+                    simple_access_token: str):
+    response = test_client.put(f"/api/sets/{lift_sets[0].id}", json={
+        "lift": lifts[1].slug,
+        "workout": workout.slug,
+        "reps": 8,
+        "weight": 160,
+        "weight_unit": schemas.WeightUnit.lb,
+    }, headers={ "Authorization": f"Bearer {simple_access_token}" })
+    assert response.status_code == 200
+
+    lift_set = response.json()
+    assert lift_set["lift"]["slug"] == lifts[1].slug
+    assert lift_set["reps"] == 8
+    assert lift_set["weight"] == 160
+    assert lift_set["weight_unit"] == schemas.WeightUnit.lb
+
+
+@pytest.mark.integration
+def test_update_set_not_found(test_client: TestClient, lifts: list[schemas.Lift], lift_sets: list[schemas.Set], workout: schemas.Workout,
+                              admin_access_token: str):
+    # invalid user
+    response = test_client.put(f"/api/sets/{lift_sets[0].id}", json={
+        "lift": lifts[1].slug,
+        "workout": workout.slug,
+        "reps": 8,
+        "weight": 160,
+        "weight_unit": schemas.WeightUnit.lb,
+    }, headers={ "Authorization": f"Bearer {admin_access_token}" })
+    assert response.status_code == 404
+
+
+@pytest.mark.integration
+def test_get_set(test_client: TestClient, lift_sets: list[schemas.Set], simple_access_token: str):
+    response = test_client.get(f"/api/sets/{lift_sets[0].id}",
+                               headers={ "Authorization": f"Bearer {simple_access_token}" })
+    assert response.status_code == 200
+
+    lift_set = response.json()
+    assert lift_set["lift"]["slug"] == lift_sets[0].lift.slug
+    assert lift_set["reps"] == 8
+    assert lift_set["weight"] == 160
+    assert lift_set["weight_unit"] == schemas.WeightUnit.lb
+
+
+@pytest.mark.integration
+def test_get_set_not_found(test_client: TestClient, lift_sets: list[schemas.Set], simple_access_token: str, admin_access_token: str):
+    # non-existent set
+    response = test_client.get(f"/api/sets/{lift_sets[-1].id + 1}",
+                               headers={ "Authorization": f"Bearer {simple_access_token}" })
+    assert response.status_code == 404
+
+    # existing set, incorrect user
+    response = test_client.get(f"/api/sets/{lift_sets[0].id}",
+                               headers={ "Authorization": f"Bearer {admin_access_token}" })
+    assert response.status_code == 404
+
+
+@pytest.mark.integration
+def test_delete_set(test_client: TestClient, lift_sets: list[schemas.Set], simple_access_token: str):
+    assert test_client.get(f"/api/sets/{lift_sets[0].id}", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    }).status_code == 200
+    response = test_client.delete(f"/api/sets/{lift_sets[0].id}",
+                                  headers={ "Authorization": f"Bearer {simple_access_token}" })
+    assert response.status_code == 204
+    assert test_client.get(f"/api/sets/{lift_sets[0].id}", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    }).status_code == 404
+
+
+@pytest.mark.integration
+def test_delete_not_found(test_client: TestClient, lift_sets: list[schemas.Set], simple_access_token: str,
+                          admin_access_token: str):
+    # non-existent set
+    response = test_client.delete(f"/api/sets/{lift_sets[-1].id + 1}", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    })
+    assert response.status_code == 404
+
+    # existing set, incorrect user
+    response = test_client.delete(f"/api/sets/{lift_sets[0].id}", headers={
+        "Authorization": f"Bearer {admin_access_token}",
+    })
+    assert response.status_code == 404
 
 
 if typing.TYPE_CHECKING:

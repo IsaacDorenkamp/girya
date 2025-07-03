@@ -167,3 +167,109 @@ def delete_workout_by_slug(connection: sqlite3.Connection, slug: str, user_id: i
     if cursor.rowcount == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Workout '{slug}' not found")
 
+
+def create_set(connection: sqlite3.Connection, set_input: schemas.SetInput, user_id: int | None = None) -> schemas.Set:
+    data = {
+        "lift_slug": set_input.lift,
+        "workout_slug": set_input.workout,
+        "reps": set_input.reps,
+        "weight": set_input.weight,
+        "weight_unit": set_input.weight_unit,
+    }
+    if user_id is not None:
+        data["user_id"] = user_id
+        query = """INSERT INTO lift_set (lift_slug, workout_slug, reps, weight, weight_unit)
+SELECT set_data.* FROM (VALUES (:lift_slug, :workout_slug, :reps, :weight, :weight_unit)) as set_data
+INNER JOIN workout ON workout.slug = :workout_slug
+WHERE workout.user_id = :user_id
+"""
+    else:
+        query = """INSERT INTO lift_set (lift_slug, workout_slug, reps, weight, weight_unit) VALUES
+(:lift_slug, :workout_slug, :reps, :weight, :weight_unit)"""
+    cursor = connection.execute(query, data)
+    connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No workout '{set_input.workout}'")
+
+    lift = get_lift_by_slug(connection, set_input.lift)
+    set_id = cast(int, cursor.lastrowid)
+    return schemas.Set(
+        lift=cast(schemas.Lift, lift),
+        reps=set_input.reps,
+        weight=set_input.weight,
+        weight_unit=set_input.weight_unit,
+        id=set_id,
+    )
+
+
+def update_set_by_id(connection: sqlite3.Connection, set_id: int, set_input: schemas.SetUpdateInput, user_id: int) -> schemas.Set:
+    cursor = connection.execute("""UPDATE lift_set SET lift_slug = :lift_slug, reps = :reps, weight = :weight, weight_unit = :weight_unit
+    WHERE id IN (
+        SELECT lift_set.id FROM lift_set
+        INNER JOIN workout ON lift_set.workout_slug = workout.slug
+        WHERE lift_set.id = :set_id AND workout.user_id = :user_id
+    )""", {
+        "lift_slug": set_input.lift,
+        "reps": set_input.reps,
+        "weight": set_input.weight,
+        "weight_unit": set_input.weight_unit,
+        "set_id": set_id,
+        "user_id": user_id,
+    })
+    connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No set '{set_id}'")
+
+    # If we've reached here, we can know that the lift exists. Otherwise, an integrity error would have occurred.
+    lift = get_lift_by_slug(connection, set_input.lift)
+    return schemas.Set(
+        lift=cast(schemas.Lift, lift),
+        reps=set_input.reps,
+        weight=set_input.weight,
+        weight_unit=set_input.weight_unit,
+        id=set_id,
+    )
+
+
+def get_set_by_id(connection: sqlite3.Connection, set_id: int, user_id: int | None = None) -> schemas.Set | None:
+    data = { "set_id": set_id }
+    if user_id is not None:
+        data["user_id"] = user_id
+        query = """SELECT a.lift_slug, a.reps, a.weight, a.weight_unit FROM lift_set a
+INNER JOIN workout ON a.workout_slug = workout.slug
+WHERE a.id = :set_id AND workout.user_id = :user_id
+"""
+    else:
+        query = "SELECT lift_slug, reps, weight, weight_unit FROM lift_set WHERE id = :set_id"
+
+    cursor = connection.execute(query, data)
+    set_data = cursor.fetchone()
+    if set_data is None:
+        return None
+
+    lift = get_lift_by_slug(connection, set_data[0])
+    return schemas.Set(
+        lift=cast(schemas.Lift, lift),
+        reps=set_data[1],
+        weight=set_data[2],
+        weight_unit=set_data[3],
+        id=set_id,
+    )
+
+
+def delete_set_by_id(connection: sqlite3.Connection, set_id: int, user_id: int | None = None):
+    data = { "set_id": set_id }
+    if user_id is not None:
+        data["user_id"] = user_id
+        query = """DELETE FROM lift_set WHERE id in (
+    SELECT lift_set.id FROM lift_set INNER JOIN workout ON lift_set.workout_slug = workout.slug WHERE workout.user_id = :user_id AND
+    lift_set.id = :set_id
+)"""
+    else:
+        query = "DELETE FROM lift_set WHERE id = :set_id"
+
+    cursor = connection.execute(query, data)
+    connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No set '{set_id}'")
+

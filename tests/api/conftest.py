@@ -47,3 +47,21 @@ def workout(db_connection: sqlite3.Connection, split: schemas.Split, simple_user
         split=split,
         user_id=simple_user.id,
     )
+
+
+@pytest.fixture
+def lift_sets(db_connection: sqlite3.Connection, lifts: list[schemas.Lift], split: schemas.Split, workout: schemas.Workout) -> list[schemas.Set]:
+    sets = []
+    for lift in lifts:
+        cursor = db_connection.execute("""INSERT INTO lift_set (lift_slug, workout_slug, reps, weight, weight_unit) VALUES (
+:lift_slug, :workout_slug, :reps, :weight, :weight_unit)""", { "lift_slug": lift.slug, "workout_slug": workout.slug, "reps": 8, "weight": 160,
+                                                              "weight_unit": schemas.WeightUnit.lb })
+        sets.append(schemas.Set(
+            lift=lift,
+            reps=8,
+            weight=160,
+            weight_unit=schemas.WeightUnit.lb,
+            id=typing.cast(int, cursor.lastrowid),
+        ))
+
+    return sets

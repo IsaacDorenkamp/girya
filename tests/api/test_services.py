@@ -159,3 +159,117 @@ def test_delete_workout(db_connection: sqlite3.Connection, workout: schemas.Work
     with pytest.raises(HTTPException):
         services.delete_workout_by_slug(db_connection, workout.slug)
 
+
+@pytest.mark.unit
+def test_create_set(db_connection: sqlite3.Connection, lifts: list[schemas.Lift], workout: schemas.Workout,
+                    simple_user: auth.schemas.User):
+    new_set_input = schemas.SetInput(
+        lift=lifts[0].slug,
+        workout=workout.slug,
+        reps=8,
+        weight=160,
+        weight_unit=schemas.WeightUnit.lb,
+    )
+
+    valid_user_ids = [None, simple_user.id]
+    for user_id in valid_user_ids:
+        new_set = services.create_set(db_connection, new_set_input, user_id)
+
+        assert new_set.lift.slug == lifts[0].slug
+        assert new_set.reps == 8
+        assert new_set.weight == 160
+        assert new_set.weight_unit == schemas.WeightUnit.lb
+
+    bad_user_id = simple_user.id + 1
+    with pytest.raises(HTTPException):
+        services.create_set(db_connection, new_set_input, bad_user_id)
+
+    new_set_input.lift = "no-lift-slug"
+    with pytest.raises(sqlite3.IntegrityError):
+        services.create_set(db_connection, new_set_input)
+
+
+@pytest.mark.unit
+def test_update_set(db_connection: sqlite3.Connection, lift_sets: list[schemas.Set], lifts: list[schemas.Lift],
+                    simple_user: auth.schemas.User):
+    set_to_update = lift_sets[0]
+    set_id = set_to_update.id
+
+    set_update_input = schemas.SetUpdateInput(
+        lift=lifts[1].slug,
+        reps=10,
+        weight=170,
+        weight_unit=schemas.WeightUnit.kg,
+    )
+    updated_set = services.update_set_by_id(db_connection, set_id, set_update_input, simple_user.id)
+
+    assert updated_set.lift.slug == lifts[1].slug
+    assert updated_set.reps == 10
+    assert updated_set.weight == 170
+    assert updated_set.weight_unit == schemas.WeightUnit.kg
+
+    set_update_input.lift = "no-lift-slug"
+    with pytest.raises(sqlite3.IntegrityError):
+        services.update_set_by_id(db_connection, set_id, set_update_input, simple_user.id)
+
+    bad_user_id = simple_user.id + 1
+    with pytest.raises(HTTPException):
+        services.update_set_by_id(db_connection, set_id, set_update_input, bad_user_id)
+
+
+@pytest.mark.unit
+def test_get_set(db_connection: sqlite3.Connection, lift_sets: list[schemas.Set], lifts: list[schemas.Lift],
+                 simple_user: auth.schemas.User):
+    valid_user_ids = [simple_user.id, None]
+    for user_id in valid_user_ids:
+        fetched_set = services.get_set_by_id(db_connection, lift_sets[0].id, user_id)
+        assert fetched_set
+        assert fetched_set.lift.slug == lifts[0].slug
+        assert fetched_set.reps == 8
+        assert fetched_set.weight == 160
+        assert fetched_set.weight_unit == schemas.WeightUnit.lb
+
+    # non-existent set id
+    assert services.get_set_by_id(db_connection, 1000) is None
+    # existing set, incorrect user id
+    bad_user_id = simple_user.id + 1
+    assert services.get_set_by_id(db_connection, lift_sets[0].id, bad_user_id) is None
+
+
+@pytest.mark.unit
+def test_delete_set(db_connection: sqlite3.Connection, lift_sets: list[schemas.Set]):
+    # try to remove non-existent set
+    bad_id = lift_sets[-1].id + 1
+    with pytest.raises(HTTPException):
+        services.delete_set_by_id(db_connection, bad_id)
+
+    # remove existing set
+    result = db_connection.execute("SELECT * FROM lift_set WHERE id = ?", (lift_sets[0].id,))
+    assert len(result.fetchall()) == 1
+
+    services.delete_set_by_id(db_connection, lift_sets[0].id)
+
+    result = db_connection.execute("SELECT * FROM lift_set WHERE id = ?", (lift_sets[0].id,))
+    assert len(result.fetchall()) == 0
+
+
+@pytest.mark.unit
+def test_delete_set_user_id(db_connection: sqlite3.Connection, lift_sets: list[schemas.Set], simple_user: auth.schemas.User):
+    # try to remove an existing set, but specify the wrong user
+    bad_user_id = simple_user.id + 1
+    with pytest.raises(HTTPException):
+        services.delete_set_by_id(db_connection, lift_sets[0].id, bad_user_id)
+
+    # remove existing set with correct user
+    result = db_connection.execute("SELECT * FROM lift_set WHERE id = ?", (lift_sets[0].id,))
+    assert len(result.fetchall()) == 1
+
+    services.delete_set_by_id(db_connection, lift_sets[0].id, simple_user.id)
+
+    result = db_connection.execute("SELECT * FROM lift_set WHERE id = ?", (lift_sets[0].id,))
+    assert len(result.fetchall()) == 0
+
+    # ensure delete does not delete more than it should
+    all_sets = db_connection.execute("SELECT * from lift_set")
+    assert len(all_sets.fetchall()) == 2
+

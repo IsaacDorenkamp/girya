@@ -1,4 +1,5 @@
 import datetime
+import enum
 from typing import Any
 
 from pydantic import BaseModel, model_validator
@@ -54,4 +55,28 @@ class Workout(BaseModel):
 class WorkoutInput(BaseModel):
     at: datetime.datetime
     split: str  # identified by slugs
+
+
+class WeightUnit(enum.StrEnum):
+    kg = "kg"
+    lb = "lb"
+
+
+class SetUpdateInput(BaseModel):
+    lift: str  # slug
+    reps: int
+    weight: float
+    weight_unit: WeightUnit
+
+
+class SetInput(SetUpdateInput):
+    workout: str  # slug
+
+
+class Set(BaseModel):
+    lift: Lift
+    reps: int
+    weight: float
+    weight_unit: WeightUnit
+    id: int
 

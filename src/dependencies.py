@@ -20,6 +20,7 @@ def setup():
 
 def db_connection():
     connection = sqlite3.connect(config.DB_FILE, autocommit=False)
+    connection.execute("PRAGMA foreign_keys = 1")
     try:
         yield connection
     finally:
@@ -42,7 +43,7 @@ def get_user(
         payload = jwt.decode(token, config.JWT_KEY, audience=config.JWT_AUD, algorithms=config.JWT_ALGS)
         if "sub" not in payload:
             raise jwt.InvalidTokenError()
-    except jwt.InvalidTokenError as err:
+    except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials."

@@ -7,6 +7,6 @@ JWT_ALGO = "HS512"
 JWT_ALGS = ["HS512"]
 
 PERMISSIONS_GROUPS = {
-    "admin": "read:lift write:lift read:split write:split read:workout write:workout delete:workout",
-    "common": "read:lift read:split read:workout write:workout delete:workout",
+    "admin": "read:lift write:lift read:split write:split read:workout write:workout delete:workout read:set write:set delete:set",
+    "common": "read:lift read:split read:workout write:workout delete:workout read:set write:set delete:set",
 }
