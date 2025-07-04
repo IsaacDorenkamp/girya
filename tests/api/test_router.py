@@ -84,6 +84,24 @@ def test_put_lift_forbidden(test_client: TestClient, simple_access_token: str):
 
 @pytest.mark.usefixtures("lifts")
 @pytest.mark.integration
+def test_delete_lift(test_client: TestClient, admin_access_token: str):
+    response = test_client.delete("/api/lifts/some-lift-1", headers={
+        "Authorization": f"Bearer {admin_access_token}"
+    })
+    assert response.status_code == 204
+
+
+@pytest.mark.usefixtures("lifts")
+@pytest.mark.integration
+def test_delete_lift_forbidden(test_client: TestClient, simple_access_token: str):
+    response = test_client.delete("/api/lifts/some-lift-1", headers={
+        "Authorization": f"Bearer {simple_access_token}"
+    })
+    assert response.status_code == 403
+
+
+@pytest.mark.usefixtures("lifts")
+@pytest.mark.integration
 def test_create_split(test_client: TestClient, admin_access_token: str):
     response = test_client.post("/api/splits", json={
         "name": "Split",
@@ -131,6 +149,24 @@ def test_update_split_forbidden(test_client: TestClient, simple_access_token: st
         "slug": "new-split",
         "lifts": ["some-lift-1"]
     }, headers={ "Authorization": f"Bearer {simple_access_token}" })
+    assert response.status_code == 403
+
+
+@pytest.mark.usefixtures("split")
+@pytest.mark.integration
+def test_delete_split(test_client: TestClient, admin_access_token: str):
+    response = test_client.delete("/api/splits/split", headers={
+        "Authorization": f"Bearer {admin_access_token}",
+    })
+    assert response.status_code == 204
+
+
+@pytest.mark.usefixtures("split")
+@pytest.mark.integration
+def test_delete_split_forbidden(test_client: TestClient, simple_access_token: str):
+    response = test_client.delete("/api/splits/split", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    })
     assert response.status_code == 403
 
 
@@ -200,6 +236,42 @@ def test_get_workout(test_client: TestClient, simple_access_token: str):
 def test_get_workout_unauthorized(test_client: TestClient):
     response = test_client.get("/api/workouts/workout-slug")
     assert response.status_code == 401
+
+
+@pytest.mark.usefixtures("split", "workout")
+@pytest.mark.integration
+def test_list_workouts(test_client: TestClient, simple_access_token: str):
+    response = test_client.get("/api/workouts", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    })
+    assert response.status_code == 200
+
+    workouts = response.json()
+    assert len(workouts) == 1
+    assert workouts[0]["slug"] == "workout-slug"
+    assert len(workouts[0]["split"]["lifts"]) == 3
+
+
+@pytest.mark.usefixtures("workout", "lift_sets")
+@pytest.mark.integration
+def test_list_workout_sets(test_client: TestClient, simple_access_token: str):
+    response = test_client.get("/api/workouts/workout-slug/sets", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    })
+    assert response.status_code == 200
+
+    sets = response.json()
+    assert len(sets) == 3
+
+
+@pytest.mark.usefixtures("workout", "lift_sets")
+@pytest.mark.unit
+def test_list_workout_sets_not_found(test_client: TestClient, admin_access_token: str):
+    # incorrect user
+    response = test_client.get("/api/workouts/workout-slug/sets", headers={
+        "Authorization": f"Bearer {admin_access_token}",
+    })
+    assert response.status_code == 404
 
 
 @pytest.mark.usefixtures("split", "workout")

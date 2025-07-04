@@ -46,8 +46,8 @@ def test_create_user_conflict(db_connection: sqlite3.Connection):
 def test_find_user(db_connection: sqlite3.Connection):
     assert services.find_user(db_connection, "test@example.com") is None
 
-    db_connection.execute("INSERT INTO user(email, first_name, last_name, password) VALUES "
-        "('test@example.com', 'Test', 'Person', 'hash')")
+    db_connection.execute("INSERT INTO user(email, first_name, last_name, password, auth_group) VALUES "
+        "('test@example.com', 'Test', 'Person', 'hash', 'common')")
     user = services.find_user(db_connection, "test@example.com")
     assert user
     assert user.email == "test@example.com"

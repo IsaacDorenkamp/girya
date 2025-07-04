@@ -27,6 +27,16 @@ def test_create_lift_conflict(db_connection: sqlite3.Connection):
 
 
 @pytest.mark.unit
+def test_delete_lift(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]):
+    services.delete_lift_by_slug(db_connection, lifts[0].slug)
+    cursor = db_connection.execute("SELECT id FROM lift")
+    assert len(cursor.fetchall()) == 2
+
+    with pytest.raises(HTTPException):
+        services.delete_lift_by_slug(db_connection, "no-lift-slug")
+
+
+@pytest.mark.unit
 def test_create_split(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]):
     split_input = schemas.SplitInput(name="Test Split", slug="test-split", lifts=[lift.slug for lift in lifts])
     split = services.create_split(db_connection, split_input)
@@ -112,6 +122,14 @@ def test_update_split_by_slug(db_connection: sqlite3.Connection, lifts: list[sch
     assert len(refetched.lifts) == 2
 
 
+@pytest.mark.unit
+def test_delete_split_by_slug(db_connection: sqlite3.Connection, split: schemas.Split):
+    with pytest.raises(HTTPException):
+        services.delete_split_by_slug(db_connection, "no-split-slug")
+
+    services.delete_split_by_slug(db_connection, split.slug)
+
+
 @pytest.mark.usefixtures("split")
 @pytest.mark.unit
 def test_create_workout(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
@@ -149,6 +167,14 @@ def test_get_workout(db_connection: sqlite3.Connection, simple_user: auth.schema
 
     fetched_workout = services.get_workout_by_slug(db_connection, "no-workout-slug")
     assert fetched_workout is None
+
+
+@pytest.mark.usefixtures("workout")
+@pytest.mark.unit
+def test_list_workouts(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
+    workouts = services.list_workouts(db_connection, simple_user.id)
+    assert len(workouts) == 1
+    assert len(workouts[0].split.lifts) == 3
 
 
 @pytest.mark.unit
@@ -234,6 +260,18 @@ def test_get_set(db_connection: sqlite3.Connection, lift_sets: list[schemas.Set]
     # existing set, incorrect user id
     bad_user_id = simple_user.id + 1
     assert services.get_set_by_id(db_connection, lift_sets[0].id, bad_user_id) is None
+
+
+@pytest.mark.usefixtures("lift_sets", "workout")
+@pytest.mark.unit
+def test_list_sets(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
+    valid_user_ids = [simple_user.id, None]
+    for user_id in valid_user_ids:
+        sets = services.list_sets_by_workout(db_connection, "workout-slug", user_id)
+        assert len(sets) == 3
+
+    with pytest.raises(HTTPException):
+        services.list_sets_by_workout(db_connection, "workout-slug", simple_user.id + 1)
 
 
 @pytest.mark.unit

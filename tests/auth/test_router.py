@@ -49,7 +49,7 @@ def test_login(test_client: TestClient, db_connection: sqlite3.Connection):
 
     decoded_refresh = jwt.decode(refresh_token, JWT_KEY, audience=JWT_AUD, algorithms=JWT_ALGS)
     assert decoded_refresh["sub"] == "test@example.com"
-    assert decoded_refresh["scope"] == "refresh"
+    assert "refresh" in decoded_refresh["scope"].split(" ")
 
 
 @pytest.mark.integration

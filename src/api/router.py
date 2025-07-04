@@ -53,6 +53,16 @@ def put_lift(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"Lift '{slug}' not found.")
 
+
+@router.delete("/lifts/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_lift(
+    slug: str,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    _: Annotated[auth.schemas.User, Security(get_user, scopes=["delete:lift"])]
+):
+    services.delete_lift_by_slug(connection, slug)
+
+
 @router.post("/splits", status_code=201)
 def create_split(
     split_input: schemas.SplitInput,
@@ -80,6 +90,15 @@ def update_split(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No split '{slug}'")
 
 
+@router.delete("/splits/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_split(
+    slug: str,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    _: Annotated[auth.schemas.User, Security(get_user, scopes=["delete:split"])]
+):
+    services.delete_split_by_slug(connection, slug)
+
+
 @router.get("/splits/{slug}")
 def get_split(
     slug: str,
@@ -93,16 +112,19 @@ def get_split(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No split '{slug}'")
 
 
-@router.post("/workouts", status_code=201)
+@router.post("/workouts", response_model_exclude={"user_id"}, status_code=201)
 def post_workout(
     workout_input: schemas.WorkoutInput,
     connection: Annotated[sqlite3.Connection, Depends(db_connection)],
     user: Annotated[auth.schemas.User, Security(get_user, scopes=["write:workout"])]
 ) -> schemas.Workout:
-    return services.create_workout(connection, workout_input, user.id)
+    try:
+        return services.create_workout(connection, workout_input, user.id)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Workout with date '{workout_input.at}' already exists")
 
 
-@router.get("/workouts/{slug}")
+@router.get("/workouts/{slug}", response_model_exclude={"user_id"})
 def get_workout(
     slug: str,
     connection: Annotated[sqlite3.Connection, Depends(db_connection)],
@@ -113,6 +135,24 @@ def get_workout(
         return workout
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No workout '{slug}'")
+
+
+@router.get("/workouts/{slug}/sets")
+def get_workout_sets(
+    slug: str,
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    user: Annotated[auth.schemas.User, Security(get_user, scopes=["read:set"])],
+) -> list[schemas.Set]:
+    sets = services.list_sets_by_workout(connection, slug, user.id)
+    return sets
+
+
+@router.get("/workouts", response_model_exclude={"user_id"})
+def list_workouts(
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    user: Annotated[auth.schemas.User, Security(get_user, scopes=["read:workout"])],
+) -> list[schemas.Workout]:
+    return services.list_workouts(connection, user.id)
 
 
 @router.delete("/workouts/{slug}", status_code=204)

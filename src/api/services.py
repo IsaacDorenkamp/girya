@@ -11,6 +11,13 @@ def create_lift(connection: sqlite3.Connection, lift: schemas.PartialLift) -> sc
     return schemas.Lift(**lift.model_dump(exclude={"id"}), id=cast(int, cursor.lastrowid))
 
 
+def delete_lift_by_slug(connection: sqlite3.Connection, slug: str):
+    cursor = connection.execute("DELETE FROM lift WHERE slug = ?", (slug,))
+    connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No lift '{slug}'")
+
+
 def create_split(connection: sqlite3.Connection, split: schemas.SplitInput) -> schemas.Split:
     interpolations = "(" + ", ".join(["?" for _ in range(len(split.lifts))]) + ")"
     cursor = connection.execute("SELECT id, name, slug FROM lift WHERE slug IN %s" % interpolations, split.lifts)
@@ -105,13 +112,14 @@ def update_split_by_slug(connection: sqlite3.Connection, slug: str, split: schem
 
     connection.execute("DELETE FROM split_lift WHERE lift_id NOT IN %s" % interpolations, split.lifts)
 
-    interpolations = ", ".join(["(?, ?)" for _ in range(len(split.lifts))])
-    values = []
     lift_models = []
-    for lift in lifts:
-        values.extend([split_id, lift[0]])
-        lift_models.append(schemas.Lift(id=lift[0], name=lift[1], slug=lift[2]))
-    connection.execute("INSERT INTO split_lift (split_id, lift_id) VALUES %s" % interpolations, values)
+    if len(split.lifts) > 0:
+        interpolations = ", ".join(["(?, ?)" for _ in range(len(split.lifts))])
+        values = []
+        for lift in lifts:
+            values.extend([split_id, lift[0]])
+            lift_models.append(schemas.Lift(id=lift[0], name=lift[1], slug=lift[2]))
+        connection.execute("INSERT INTO split_lift (split_id, lift_id) VALUES %s" % interpolations, values)
 
     return schemas.Split(
         id=split_id,
@@ -119,6 +127,14 @@ def update_split_by_slug(connection: sqlite3.Connection, slug: str, split: schem
         slug=split.slug,
         lifts=lift_models,
     )
+
+
+def delete_split_by_slug(connection: sqlite3.Connection, slug: str):
+    cursor = connection.execute("DELETE FROM split WHERE slug = ?", (slug,))
+    connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Split '{slug}' not found")
 
 
 def create_workout(connection: sqlite3.Connection, workout_input: schemas.WorkoutInput, user_id: int) -> schemas.Workout:
@@ -134,6 +150,35 @@ def create_workout(connection: sqlite3.Connection, workout_input: schemas.Workou
         "user_id": workout.user_id,
     })
     return workout
+
+
+def list_workouts(connection: sqlite3.Connection, user_id: int) -> list[schemas.Workout]:
+    cursor = connection.execute("""SELECT workout.at, workout.slug, workout.split_id, split.slug, split.name, lift.slug, lift.name, lift.id
+FROM workout
+INNER JOIN split ON workout.split_id = split.id
+LEFT JOIN split_lift ON split.id = split_lift.split_id
+LEFT JOIN lift  ON split_lift.lift_id = lift.id
+WHERE user_id = ?""", (user_id,))
+    workout_data = cursor.fetchall()
+
+    workouts = {}
+    for result in workout_data:
+        at, slug, split_id, split_slug, split_name, lift_slug, lift_name, lift_id = result
+        if slug not in workouts:
+            lifts = []
+            if lift_slug and lift_name:
+                lifts.append(schemas.Lift(slug=lift_slug, name=lift_name, id=lift_id))
+            workouts[slug] = schemas.Workout(
+                at=at,
+                slug=slug,
+                split=schemas.Split(slug=split_slug, name=split_name, lifts=lifts, id=split_id),
+                user_id=user_id,
+            )
+        else:
+            lift = schemas.Lift(slug=lift_slug, name=lift_name, id=lift_id)
+            workouts[slug].split.lifts.append(lift)
+
+    return list(workouts.values())
 
 
 def get_workout_by_slug(connection: sqlite3.Connection, slug: str):
@@ -255,6 +300,24 @@ WHERE a.id = :set_id AND workout.user_id = :user_id
         weight_unit=set_data[3],
         id=set_id,
     )
+
+
+def list_sets_by_workout(connection: sqlite3.Connection, workout_slug: str, user_id: int | None = None) -> list[schemas.Set]:
+    workout = get_workout_by_slug(connection, workout_slug)
+    if workout is None or (user_id is not None and workout.user_id != user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No workout '{workout_slug}'")
+
+    cursor = connection.execute("""SELECT lift_slug, reps, weight, weight_unit, lift_set.id, lift.name, lift.id FROM lift_set 
+INNER JOIN lift ON lift_set.lift_slug = lift.slug
+WHERE workout_slug = ?""", (workout_slug,))
+    sets = [schemas.Set(
+        lift=schemas.Lift(slug=row[0], name=row[5], id=row[6]),
+        reps=row[1],
+        weight=row[2],
+        weight_unit=row[3],
+        id=row[4],
+    ) for row in cursor.fetchall()]
+    return sets
 
 
 def delete_set_by_id(connection: sqlite3.Connection, set_id: int, user_id: int | None = None):

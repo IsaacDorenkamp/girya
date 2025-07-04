@@ -8,6 +8,7 @@ import time
 
 import auth.schemas
 from main import app
+import config
 from config import JWT_ALGO, JWT_AUD, JWT_ISS, JWT_KEY, PERMISSIONS_GROUPS
 from dependencies import db_connection as db_conn_dep
 
@@ -18,6 +19,7 @@ BEGIN;
 CREATE TABLE user(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email VARCHAR UNIQUE NOT NULL,
+    auth_group VARCHAR NOT NULL,
     first_name VARCHAR NOT NULL,
     last_name VARCHAR NOT NULL,
     password VARCHAR NOT NULL
@@ -36,8 +38,8 @@ CREATE TABLE split_lift(
     split_id INTEGER NOT NULL,
     lift_id INTEGER NOT NULL,
     PRIMARY KEY (split_id, lift_id),
-    FOREIGN KEY (split_id) REFERENCES split(id),
-    FOREIGN KEY (lift_id) REFERENCES lift(id),
+    FOREIGN KEY (split_id) REFERENCES split(id) ON DELETE CASCADE,
+    FOREIGN KEY (lift_id) REFERENCES lift(id) ON DELETE CASCADE,
     UNIQUE(split_id, lift_id) ON CONFLICT ROLLBACK
 );
 CREATE TABLE workout(
@@ -76,19 +78,24 @@ def db_connection():
 
 @pytest.fixture(scope="function")
 def test_client():
-    return TestClient(app)
+    orig_env = config.ENVIRONMENT
+    config.ENVIRONMENT = "test"
+    with TestClient(app) as client:
+        yield client
+    config.ENVIRONMENT = orig_env
 
 
 @pytest.fixture
 def simple_user(db_connection: sqlite3.Connection) -> auth.schemas.User:
     hashed = argon2.PasswordHasher().hash("simple")
-    cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password)
-VALUES ("test@example.com", "Simple", "User", "%s") RETURNING id""" % hashed)
+    cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password, auth_group)
+VALUES ("test@example.com", "Simple", "User", "%s", "common") RETURNING id""" % hashed)
     user_id = cursor.fetchone()[0]
     return auth.schemas.User(
         email="test@example.com",
         first_name="Simple",
         last_name="User",
+        auth_group="common",
         id=user_id,
     )
 
@@ -96,13 +103,14 @@ VALUES ("test@example.com", "Simple", "User", "%s") RETURNING id""" % hashed)
 @pytest.fixture
 def admin_user(db_connection: sqlite3.Connection) -> auth.schemas.User:
     hashed = argon2.PasswordHasher().hash("admin")
-    cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password)
-VALUES ("admin@example.com", "Admin", "User", "%s") RETURNING id""" % hashed)
+    cursor = db_connection.execute("""INSERT INTO user (email, first_name, last_name, password, auth_group)
+VALUES ("admin@example.com", "Admin", "User", "%s", "admin") RETURNING id""" % hashed)
     user_id = cursor.fetchone()[0]
     return auth.schemas.User(
         email="admin@example.com",
         first_name="Admin",
         last_name="User",
+        auth_group="admin",
         id=user_id,
     )
 

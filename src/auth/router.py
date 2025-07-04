@@ -4,10 +4,10 @@ import typing
 
 import argon2
 from argon2 import PasswordHasher
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 import jwt
 
-from config import JWT_KEY, JWT_ISS, JWT_AUD, JWT_ALGO, JWT_ALGS
+from config import JWT_KEY, JWT_ISS, JWT_AUD, JWT_ALGO, JWT_ALGS, PERMISSIONS_GROUPS
 from dependencies import db_connection
 from . import services
 from . import schemas
@@ -47,13 +47,14 @@ def login(
         "sub": user.email,
         "aud": JWT_AUD,
         "exp": int(time.time()) + (60 * 5),
+        "scope": PERMISSIONS_GROUPS[user.auth_group]
     }, JWT_KEY, algorithm=JWT_ALGO)
     refresh_token = jwt.encode({
         "iss": JWT_ISS,
         "sub": user.email,
         "aud": JWT_AUD,
         "exp": int(time.time()) + (60 * 60),
-        "scope": "refresh"
+        "scope": ("refresh " + PERMISSIONS_GROUPS[user.auth_group]).strip()
     }, JWT_KEY, algorithm=JWT_ALGO)
     return schemas.Tokens(
         access=access_token,
@@ -68,12 +69,17 @@ def refresh(
     decoded_token = jwt.decode(refresh.refresh, JWT_KEY, audience=JWT_AUD, algorithms=JWT_ALGS)
 
     new_token = decoded_token.copy()
-    del new_token["scope"]
+    scopes = new_token["scope"].split(" ")
+    if "refresh" not in scopes:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token does not have 'refresh' scope")
+    scopes = [scope for scope in scopes if scope != "refresh"]
+    token_scope = " ".join(scopes)
+    new_token["scope"] = token_scope
     new_token["exp"] = int(time.time()) + (60 * 5)
 
     access_token  = jwt.encode(new_token, JWT_KEY, algorithm=JWT_ALGO)
     new_token["exp"] = int(time.time()) + (60 * 60)
-    new_token["scope"] = "refresh"
+    new_token["scope"] = ("refresh " + token_scope).strip()
     refresh_token = jwt.encode(new_token, JWT_KEY, algorithm=JWT_ALGO)
     return schemas.Tokens(
         access=access_token,

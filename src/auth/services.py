@@ -1,14 +1,13 @@
 from __future__ import annotations
-import email.utils
 import re
 import typing
 
 from argon2 import PasswordHasher
 from fastapi import HTTPException
 
-from dependencies import db_connection
+from config import DEFAULT_AUTH_GROUP
 from .exceptions import EmailValidationError
-from .schemas import UserInput, User, UserRecord
+from .schemas import User, UserRecord
 
 
 def validate_email(email: str):
@@ -29,7 +28,7 @@ def validate_email(email: str):
     last_was_dot = False
     domain = ""
 
-    for index, character in enumerate(email):
+    for character in email:
         if is_local_part:
             if character == '"':
                 if is_quoted and not is_escaped:
@@ -37,7 +36,6 @@ def validate_email(email: str):
                 elif is_escaped:
                     is_escaped = False
                 else:
-                    print("QUOTING")
                     is_quoted = True
             elif character == '\\':
                 if is_escaped:
@@ -96,25 +94,28 @@ def create_user(connection: sqlite3.Connection, email: str, password: str, first
     validate_email(email)
     hasher = PasswordHasher()
     pw_hash = hasher.hash(password)
-    cursor = connection.execute("INSERT INTO user (email, first_name, last_name, password) VALUES "
-        "(:email, :first_name, :last_name, :password)",
-        { "email": email, "first_name": first_name, "last_name": last_name, "password": pw_hash }
+    cursor = connection.execute("INSERT INTO user (email, first_name, last_name, password, auth_group) VALUES "
+        "(:email, :first_name, :last_name, :password, :auth_group)",
+        { "email": email, "first_name": first_name, "last_name": last_name, "password": pw_hash,
+         "auth_group": DEFAULT_AUTH_GROUP }
     )
     if cursor.lastrowid is not None:
-        return User(email=email, first_name=first_name, last_name=last_name, id=cursor.lastrowid)
+        return User(email=email, first_name=first_name, last_name=last_name, auth_group=DEFAULT_AUTH_GROUP,
+                    id=cursor.lastrowid)
     else:
         raise HTTPException(status_code=500, detail="An error occurred creating a user.")
 
 
 def find_user(connection: sqlite3.Connection, email: str) -> UserRecord | None:
-    result = connection.execute("SELECT email, first_name, last_name, password, id FROM user WHERE email = :email",
+    result = connection.execute("SELECT email, first_name, last_name, password, auth_group, id FROM user WHERE email = :email",
                                 { "email": email })
     user = result.fetchone()
     if user is None:
         return None
 
-    email, first_name, last_name, password, user_id = user
-    return UserRecord(email=email, first_name=first_name, last_name=last_name, password=password, id=user_id)
+    email, first_name, last_name, password, auth_group, user_id = user
+    return UserRecord(email=email, first_name=first_name, last_name=last_name, password=password,
+                      auth_group=auth_group, id=user_id)
 
 
 if typing.TYPE_CHECKING:

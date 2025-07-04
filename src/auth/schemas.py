@@ -13,6 +13,7 @@ class User(BaseModel):
     first_name: str
     last_name: str
     id: int
+    auth_group: str
 
 
 class UserRecord(User):
