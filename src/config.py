@@ -1,6 +1,15 @@
 import os
 
-ENVIRONMENT = os.environ.get("environment", "dev")
+from definitions import Environment
+
+
+ENVIRONMENT = Environment(os.environ.get("environment", "dev"))
+
+if ENVIRONMENT == Environment.dev:
+    CORS_ORIGINS = ["http://localhost:5173"]
+else:
+    CORS_ORIGINS = []
+
 
 DB_FILE = "/var/lib/girya/girya.db"
 

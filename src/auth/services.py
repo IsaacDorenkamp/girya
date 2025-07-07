@@ -120,3 +120,4 @@ def find_user(connection: sqlite3.Connection, email: str) -> UserRecord | None:
 
 if typing.TYPE_CHECKING:
     import sqlite3
+
