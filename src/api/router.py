@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 from typing import Annotated
 
@@ -151,8 +152,9 @@ def get_workout_sets(
 def list_workouts(
     connection: Annotated[sqlite3.Connection, Depends(db_connection)],
     user: Annotated[auth.schemas.User, Security(get_user, scopes=["read:workout"])],
+    at: datetime.datetime | None = None,
 ) -> list[schemas.Workout]:
-    return services.list_workouts(connection, user.id)
+    return services.list_workouts(connection, user.id, at)
 
 
 @router.delete("/workouts/{slug}", status_code=204)

@@ -169,12 +169,18 @@ def test_get_workout(db_connection: sqlite3.Connection, simple_user: auth.schema
     assert fetched_workout is None
 
 
-@pytest.mark.usefixtures("workout")
 @pytest.mark.unit
-def test_list_workouts(db_connection: sqlite3.Connection, simple_user: auth.schemas.User):
+def test_list_workouts(db_connection: sqlite3.Connection, simple_user: auth.schemas.User,
+                       workout: schemas.Workout):
     workouts = services.list_workouts(db_connection, simple_user.id)
     assert len(workouts) == 1
     assert len(workouts[0].split.lifts) == 3
+
+    workouts = services.list_workouts(db_connection, simple_user.id, workout.at)
+    assert len(workouts) == 1
+
+    workouts = services.list_workouts(db_connection, simple_user.id, workout.at + datetime.timedelta(days=1))
+    assert len(workouts) == 0
 
 
 @pytest.mark.unit

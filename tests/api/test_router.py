@@ -238,9 +238,9 @@ def test_get_workout_unauthorized(test_client: TestClient):
     assert response.status_code == 401
 
 
-@pytest.mark.usefixtures("split", "workout")
+@pytest.mark.usefixtures("split")
 @pytest.mark.integration
-def test_list_workouts(test_client: TestClient, simple_access_token: str):
+def test_list_workouts(test_client: TestClient, simple_access_token: str, workout: schemas.Workout):
     response = test_client.get("/api/workouts", headers={
         "Authorization": f"Bearer {simple_access_token}",
     })
@@ -250,6 +250,26 @@ def test_list_workouts(test_client: TestClient, simple_access_token: str):
     assert len(workouts) == 1
     assert workouts[0]["slug"] == "workout-slug"
     assert len(workouts[0]["split"]["lifts"]) == 3
+
+    response = test_client.get("/api/workouts", params={
+        "at": workout.at.isoformat()
+    }, headers={
+        "Authorization": f"Bearer {simple_access_token}"
+    })
+    assert response.status_code == 200
+
+    workouts = response.json()
+    assert len(workouts) == 1
+
+    response = test_client.get("/api/workouts", params={
+        "at": (workout.at + datetime.timedelta(days=1)).isoformat(),
+    }, headers={
+        "Authorization": f"Bearer {simple_access_token}"
+    })
+    assert response.status_code == 200
+
+    workouts = response.json()
+    assert len(workouts) == 0
 
 
 @pytest.mark.usefixtures("workout", "lift_sets")

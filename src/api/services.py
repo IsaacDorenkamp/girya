@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 from typing import cast
 
@@ -152,13 +153,19 @@ def create_workout(connection: sqlite3.Connection, workout_input: schemas.Workou
     return workout
 
 
-def list_workouts(connection: sqlite3.Connection, user_id: int) -> list[schemas.Workout]:
-    cursor = connection.execute("""SELECT workout.at, workout.slug, workout.split_id, split.slug, split.name, lift.slug, lift.name, lift.id
+def list_workouts(connection: sqlite3.Connection, user_id: int, search_date: datetime.datetime | None = None) -> list[schemas.Workout]:
+    query = """SELECT workout.at, workout.slug, workout.split_id, split.slug, split.name, lift.slug, lift.name, lift.id
 FROM workout
 INNER JOIN split ON workout.split_id = split.id
 LEFT JOIN split_lift ON split.id = split_lift.split_id
 LEFT JOIN lift  ON split_lift.lift_id = lift.id
-WHERE user_id = ?""", (user_id,))
+WHERE user_id = :user_id"""
+    data: dict[str, int | datetime.datetime] = { "user_id": user_id }
+    if search_date is not None:
+        query += " AND workout.at = :search_date"
+        data["search_date"] = search_date
+
+    cursor = connection.execute(query, data)
     workout_data = cursor.fetchall()
 
     workouts = {}
