@@ -88,6 +88,19 @@ def test_get_split_by_slug(db_connection: sqlite3.Connection):
     assert services.get_split_by_slug(db_connection, "no-split") is None
 
 
+@pytest.mark.usefixtures("split")
+@pytest.mark.unit
+def test_list_splits(db_connection: sqlite3.Connection):
+    splits = services.list_splits(db_connection)
+    assert len(splits) == 1
+    assert len(splits[0].lifts) == 3
+
+    # test to ensure splits without lifts are included
+    services.create_split(db_connection, schemas.SplitInput(name="Split 2", slug="split-2", lifts=[]))
+    splits = services.list_splits(db_connection)
+    assert len(splits) == 2
+
+
 @pytest.mark.unit
 def test_update_lift_by_slug(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]):
     new_lift = lifts[0].model_copy()

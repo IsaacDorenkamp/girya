@@ -192,6 +192,23 @@ def test_get_split_unauthorized(test_client: TestClient):
 
 @pytest.mark.usefixtures("split")
 @pytest.mark.integration
+def test_list_splits(test_client: TestClient, simple_access_token: str):
+    response = test_client.get("/api/splits", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    })
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+@pytest.mark.usefixtures("split")
+@pytest.mark.integration
+def test_list_splits_unauthorized(test_client: TestClient):
+    response = test_client.get("/api/splits")
+    assert response.status_code == 401
+
+
+@pytest.mark.usefixtures("split")
+@pytest.mark.integration
 def test_create_workout(test_client: TestClient, simple_access_token: str):
     response = test_client.post("/api/workouts", json={
         "at": "2025-01-01T00:00:00",

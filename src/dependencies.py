@@ -1,6 +1,5 @@
 import datetime
 import sqlite3
-import threading
 from typing import Annotated, cast
 
 from fastapi import Depends, HTTPException, status
@@ -19,45 +18,31 @@ def setup():
     sqlite3.register_converter("datetime", lambda dtstr: datetime.datetime.fromtimestamp(int(dtstr), tz=datetime.timezone.utc))
 
 
-# FastAPI usually caches dependencies, so that a database connection
-# would only be instantiated once and not a second time. However,
-# the Security() dependency type uses security_scopes to generate its
-# cache key, causing it to not use the same shared dependency value.
-# This normally might not be very noticeable, but it completely breaks
-# with a database connection, which is used by the get_user dependency.
-# I will use threaindg.local here to use only a single connection which
-# will be re-used on multiple invocations. If this app is ever updated
-# to use asyncio, this will ensure that only one connection is used per
-# thread. It doesn't seem to break tests, but it does break in-vivo
-# usage. I assume this is because tests use an in-memory database, while
-# in-vivo usage uses an actual file, which appears to become locked when
-# a connection is established.
-sqlite_ctx = threading.local()
+_usages: int = 0
+_connection: sqlite3.Connection | None = None
 
 
 def db_connection():
-    if not hasattr(sqlite_ctx, "usages"):
-        sqlite_ctx.usages = 0
-        sqlite_ctx.connection = None
+    global _usages
+    global _connection
 
-    if sqlite_ctx.usages == 0:
-        connection = sqlite3.connect(config.DB_FILE, autocommit=False)
-        connection.execute("PRAGMA foreign_keys = 1")
-        sqlite_ctx.usages = 1
-        sqlite_ctx.connection = connection
-    else:
-        connection = cast(sqlite3.Connection, sqlite_ctx.connection)
-        sqlite_ctx.usages += 1
+    if _usages == 0:
+        _connection = sqlite3.Connection(config.DB_FILE, autocommit=False)
 
+    _usages += 1
+
+    connection = cast(sqlite3.Connection, _connection)
     try:
         yield connection
     finally:
         # only finalize connection if all usages of dependency have exited
-        sqlite_ctx.usages -= 1
-        if sqlite_ctx.usages == 0:
+        # references a custom attribute used to manually close a connection
+        # for very specific purposes
+        _usages -= 1
+        if _usages == 0:
             connection.commit()
             connection.close()
-            sqlite_ctx.connection = None
+            _connection = None
 
 
 # security
@@ -75,7 +60,7 @@ def get_user(
         payload = jwt.decode(token, config.JWT_KEY, audience=config.JWT_AUD, algorithms=config.JWT_ALGS)
         if "sub" not in payload:
             raise jwt.InvalidTokenError()
-    except jwt.InvalidTokenError:
+    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials."

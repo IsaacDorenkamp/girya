@@ -66,7 +66,10 @@ def login(
 def refresh(
     refresh: schemas.RefreshToken,
 ) -> schemas.Tokens:
-    decoded_token = jwt.decode(refresh.refresh, JWT_KEY, audience=JWT_AUD, algorithms=JWT_ALGS)
+    try:
+        decoded_token = jwt.decode(refresh.refresh, JWT_KEY, audience=JWT_AUD, algorithms=JWT_ALGS)
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
 
     new_token = decoded_token.copy()
     scopes = new_token["scope"].split(" ")

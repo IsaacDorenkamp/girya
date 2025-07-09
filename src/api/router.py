@@ -113,6 +113,14 @@ def get_split(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No split '{slug}'")
 
 
+@router.get("/splits")
+def list_splits(
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    _: Annotated[auth.schemas.User, Security(get_user, scopes=["read:split"])]
+) -> list[schemas.Split]:
+    return services.list_splits(connection)
+
+
 @router.post("/workouts", response_model_exclude={"user_id"}, status_code=201)
 def post_workout(
     workout_input: schemas.WorkoutInput,

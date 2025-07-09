@@ -81,6 +81,34 @@ def get_split_by_id(connection: sqlite3.Connection, id: int) -> schemas.Split | 
     return build_split(connection, split_data)
 
 
+def list_splits(connection: sqlite3.Connection) -> list[schemas.Split]:
+    cursor = connection.execute("""SELECT split.id, split.name, split.slug, lift.id, lift.name, lift.slug FROM split
+LEFT JOIN split_lift ON split.id = split_lift.split_id
+LEFT JOIN lift ON split_lift.lift_id = lift.id
+""")
+    splits: dict[int, schemas.Split] = {}
+    for row in cursor.fetchall():
+        split_id = row[0]
+
+        # check if lift is actually present
+        if row[3] is not None:
+            lift = schemas.Lift(id=row[3], name=row[4], slug=row[5])
+        else:
+            lift = None
+
+        if split_id in splits:
+            if lift:
+                splits[split_id].lifts.append(lift)
+        else:
+            lifts = []
+            if lift:
+                lifts.append(lift)
+            split = schemas.Split(id=split_id, name=row[1], slug=row[2], lifts=lifts)
+            splits[split_id] = split
+
+    return list(splits.values())
+
+
 def update_lift_by_slug(connection: sqlite3.Connection, slug: str, lift: schemas.PartialLift) -> schemas.Lift | None:
     cursor = connection.execute("UPDATE lift SET name = :name, slug = :new_slug WHERE slug = :slug RETURNING lift.id", {
         "name": lift.name,
@@ -153,14 +181,14 @@ def create_workout(connection: sqlite3.Connection, workout_input: schemas.Workou
     return workout
 
 
-def list_workouts(connection: sqlite3.Connection, user_id: int, search_date: datetime.datetime | None = None) -> list[schemas.Workout]:
+def list_workouts(connection: sqlite3.Connection, user_id: int, search_date: datetime.date | None = None) -> list[schemas.Workout]:
     query = """SELECT workout.at, workout.slug, workout.split_id, split.slug, split.name, lift.slug, lift.name, lift.id
 FROM workout
 INNER JOIN split ON workout.split_id = split.id
 LEFT JOIN split_lift ON split.id = split_lift.split_id
 LEFT JOIN lift  ON split_lift.lift_id = lift.id
 WHERE user_id = :user_id"""
-    data: dict[str, int | datetime.datetime] = { "user_id": user_id }
+    data: dict[str, int | datetime.date] = { "user_id": user_id }
     if search_date is not None:
         query += " AND workout.at = :search_date"
         data["search_date"] = search_date
