@@ -1,0 +1,1 @@
+- Allow set fetch by workout *and* lift
