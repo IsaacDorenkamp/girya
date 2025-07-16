@@ -14,6 +14,10 @@ class Lift(PartialLift):
     id: int
 
 
+class LiftList(BaseModel):
+    lifts: list[Lift]
+
+
 class BaseSplit(BaseModel):
     name: str
     slug: str

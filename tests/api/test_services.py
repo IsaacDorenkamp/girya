@@ -37,6 +37,12 @@ def test_delete_lift(db_connection: sqlite3.Connection, lifts: list[schemas.Lift
 
 
 @pytest.mark.unit
+def test_list_lifts(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]):
+    fetched_lifts = services.list_lifts(db_connection)
+    assert len(fetched_lifts) == len(lifts)
+
+
+@pytest.mark.unit
 def test_create_split(db_connection: sqlite3.Connection, lifts: list[schemas.Lift]):
     split_input = schemas.SplitInput(name="Test Split", slug="test-split", lifts=[lift.slug for lift in lifts])
     split = services.create_split(db_connection, split_input)

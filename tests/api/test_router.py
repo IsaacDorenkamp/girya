@@ -48,6 +48,19 @@ def test_get_lift(test_client: TestClient, simple_access_token: str):
 
 
 @pytest.mark.integration
+def test_list_lifts(test_client: TestClient, lifts: list[schemas.Lift],
+                    simple_access_token: str):
+    response = test_client.get("/api/lifts", headers={
+        "Authorization": f"Bearer {simple_access_token}",
+    })
+
+    assert response.status_code == 200
+
+    fetched_lifts = response.json()
+    assert len(lifts) == len(fetched_lifts["lifts"])
+
+
+@pytest.mark.integration
 def test_get_lift_unauthorized(test_client: TestClient):
     response = test_client.get("/api/lifts/some-lift-1")
     assert response.status_code == 401

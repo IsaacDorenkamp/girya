@@ -26,6 +26,14 @@ def create_lift(
                             detail=f"Lift '{lift_input.slug}' already exists.")
 
 
+@router.get("/lifts")
+def list_lifts(
+    connection: Annotated[sqlite3.Connection, Depends(db_connection)],
+    _: Annotated[auth.schemas.User, Security(get_user, scopes=["read:lift"])],
+) -> schemas.LiftList:
+    return schemas.LiftList(lifts=services.list_lifts(connection))
+
+
 @router.get("/lifts/{slug}")
 def get_lift(
     slug: str,

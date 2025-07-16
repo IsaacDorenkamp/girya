@@ -50,6 +50,11 @@ def get_lift_by_slug(connection: sqlite3.Connection, slug: str) -> schemas.Lift 
     return schemas.Lift(id=lift_data[0], name=lift_data[1], slug=lift_data[2])
 
 
+def list_lifts(connection: sqlite3.Connection) -> list[schemas.Lift]:
+    cursor = connection.execute("SELECT id, name, slug FROM lift ORDER BY name ASC")
+    return [schemas.Lift(id=row[0], name=row[1], slug=row[2]) for row in cursor.fetchall()]
+
+
 def build_split(connection: sqlite3.Connection, data: tuple):
     split = schemas.Split(id=data[0], name=data[1], slug=data[2], lifts=[])
     cursor = connection.execute("""SELECT lift.id, lift.name, lift.slug FROM lift
