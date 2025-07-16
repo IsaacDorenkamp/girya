@@ -1,6 +1,7 @@
 import datetime
 import sqlite3
-from typing import Annotated, cast
+import threading
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import (
@@ -8,6 +9,7 @@ from fastapi.security import (
     SecurityScopes,
 )
 import jwt
+from starlette.requests import Request
 
 import auth.schemas
 import config
@@ -18,31 +20,41 @@ def setup():
     sqlite3.register_converter("datetime", lambda dtstr: datetime.datetime.fromtimestamp(int(dtstr), tz=datetime.timezone.utc))
 
 
-_usages: int = 0
-_connection: sqlite3.Connection | None = None
+_conn_lock = threading.Lock()
+_connections: dict[int, tuple[int, sqlite3.Connection]] = {}
 
 
-def db_connection():
-    global _usages
-    global _connection
+def db_connection(request: Request):
+    global _conn_lock
+    global _connections
 
-    if _usages == 0:
-        _connection = sqlite3.Connection(config.DB_FILE, autocommit=False)
+    req_id = id(request)
+    with _conn_lock:
+        entry = _connections.get(req_id)
+        if entry is None:
+            usages = 1
+            connection = sqlite3.Connection(config.DB_FILE, autocommit=False, check_same_thread=False)
+        else:
+            usages = entry[0] + 1
+            connection = entry[1]
+        
+        _connections[req_id] = (usages, connection)
 
-    _usages += 1
-
-    connection = cast(sqlite3.Connection, _connection)
     try:
         yield connection
     finally:
         # only finalize connection if all usages of dependency have exited
         # references a custom attribute used to manually close a connection
         # for very specific purposes
-        _usages -= 1
-        if _usages == 0:
-            connection.commit()
-            connection.close()
-            _connection = None
+        with _conn_lock:
+            entry = _connections[req_id]
+            usages = entry[0] - 1
+            if usages == 0:
+                connection.commit()
+                connection.close()
+                del _connections[req_id]
+            else:
+                _connections[req_id] = (usages, connection)
 
 
 # security
