@@ -55,7 +55,11 @@ def put_lift(
     connection: Annotated[sqlite3.Connection, Depends(db_connection)],
     _: Annotated[auth.schemas.User, Security(get_user, scopes=["write:lift"])]
 ) -> schemas.Lift:
-    updated_lift = services.update_lift_by_slug(connection, slug, lift_input)
+    try:
+        updated_lift = services.update_lift_by_slug(connection, slug, lift_input)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Lift '{lift_input.slug}' already exists.")
     if updated_lift is not None:
         return updated_lift
     else:
