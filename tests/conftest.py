@@ -47,8 +47,8 @@ CREATE TABLE workout(
     slug VARCHAR PRIMARY KEY,
     split_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
-    FOREIGN KEY (split_id) REFERENCES split(id),
-    FOREIGN KEY (user_id) REFERENCES user(id)
+    FOREIGN KEY (split_id) REFERENCES split(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
 );
 CREATE TABLE lift_set(
     id INTEGER PRIMARY KEY AUTOINCREMENT,

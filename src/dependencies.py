@@ -33,7 +33,10 @@ def db_connection(request: Request):
         entry = _connections.get(req_id)
         if entry is None:
             usages = 1
-            connection = sqlite3.Connection(config.DB_FILE, autocommit=False, check_same_thread=False)
+            connection = sqlite3.connect(config.DB_FILE, autocommit=False, check_same_thread=False)
+            # TODO: seems not to be working right :/
+            connection.execute("PRAGMA foreign_keys = 1;")
+            connection.commit()
         else:
             usages = entry[0] + 1
             connection = entry[1]
