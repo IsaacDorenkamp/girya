@@ -57,8 +57,8 @@ CREATE TABLE lift_set(
     reps INTEGER NOT NULL,
     weight REAL NOT NULL,
     weight_unit VARCHAR NOT NULL,
-    FOREIGN KEY (lift_slug) REFERENCES lift(slug),
-    FOREIGN KEY (workout_slug) REFERENCES workout(slug)
+    FOREIGN KEY (lift_slug) REFERENCES lift(slug) ON DELETE CASCADE,
+    FOREIGN KEY (workout_slug) REFERENCES workout(slug) ON DELETE CASCADE
 );
 COMMIT;
 """)
