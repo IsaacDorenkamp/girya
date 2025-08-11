@@ -13,7 +13,7 @@ else:
 
 DB_FILE = "/var/lib/girya/girya.db"
 
-JWT_KEY = "do_not_hardcode_this"
+JWT_KEY = os.environ["GIRYA_JWT_KEY"]
 JWT_ISS = "girya"
 JWT_AUD = "girya"
 JWT_ALGO = "HS512"
